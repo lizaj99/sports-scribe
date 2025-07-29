@@ -20,37 +20,59 @@ class DataValidator:
 
     @staticmethod
     def validate_game_data(game_data: dict[str, Any]) -> bool:
-        """
-        Validate game data structure and content.
-
-        Args:
-            game_data: Dictionary containing game information
-
-        Returns:
-            True if data is valid, False otherwise
-        """
         required_fields = ["fixture_id", "home_team", "away_team", "date"]
 
-        # Check required fields
         for field in required_fields:
             if field not in game_data:
                 logger.warning(f"Missing required field: {field}")
                 return False
 
-        # TODO: Add more specific validation logic
+        if not isinstance(game_data["fixture_id"], int):
+            logger.warning("fixture_id must be an integer")
+            return False
+
+        if not all(isinstance(game_data.get(key), str) and game_data[key].strip() for key in ["home_team", "away_team"]):
+            logger.warning("home_team and away_team must be non-empty strings")
+            return False
+
+        try:
+            datetime.strptime(game_data["date"], "%Y-%m-%d")
+        except ValueError:
+            logger.warning(f"Invalid date format: {game_data['date']}")
+            return False
+
+        ft_score = game_data.get("score", {}).get("ft")
+        if not (isinstance(ft_score, list) and len(ft_score) == 2 and all(isinstance(x, int) for x in ft_score)):
+            logger.warning(f"Invalid FT score: {ft_score}")
+            return False
+
         return True
 
     @staticmethod
+    def validate_fixture(fixture: dict[str, Any]) -> tuple[bool, int, list[str]]:
+        issues = []
+        required_fields = ["date", "round", "team1", "team2", "score"]
+
+        for field in required_fields:
+            if field not in fixture:
+                issues.append(f"Missing field: {field}")
+
+        try:
+            datetime.strptime(fixture.get("date", ""), "%Y-%m-%d")
+        except ValueError:
+            issues.append("Invalid date format (expected YYYY-MM-DD)")
+
+        score = fixture.get("score", {}).get("ft", [])
+        if not isinstance(score, list) or len(score) != 2 or not all(isinstance(s, int) for s in score):
+            issues.append("Invalid or missing full-time score (score.ft)")
+
+        score_value = 100 - len(issues) * 20
+        score_value = max(0, score_value)
+
+        return (len(issues) == 0), score_value, issues
+
+    @staticmethod
     def validate_team_data(team_data: dict[str, Any]) -> bool:
-        """
-        Validate team data structure and content.
-
-        Args:
-            team_data: Dictionary containing team information
-
-        Returns:
-            True if data is valid, False otherwise
-        """
         required_fields = ["team_id", "name", "league"]
 
         for field in required_fields:
@@ -58,20 +80,18 @@ class DataValidator:
                 logger.warning(f"Missing required field: {field}")
                 return False
 
-        # TODO: Add more specific validation logic
+        if not isinstance(team_data["team_id"], int):
+            logger.warning("team_id must be an integer")
+            return False
+
+        if not isinstance(team_data["name"], str) or not team_data["name"].strip():
+            logger.warning("Invalid team name")
+            return False
+
         return True
 
     @staticmethod
     def validate_player_data(player_data: dict[str, Any]) -> bool:
-        """
-        Validate player data structure and content.
-
-        Args:
-            player_data: Dictionary containing player information
-
-        Returns:
-            True if data is valid, False otherwise
-        """
         required_fields = ["player_id", "name", "position", "team"]
 
         for field in required_fields:
@@ -79,8 +99,26 @@ class DataValidator:
                 logger.warning(f"Missing required field: {field}")
                 return False
 
-        # TODO: Add more specific validation logic
         return True
+
+    @staticmethod
+    def score_game_data(game_data: dict[str, Any]) -> int:
+        score = 100
+        if "fixture_id" not in game_data:
+            score -= 20
+        if not game_data.get("home_team") or not game_data.get("away_team"):
+            score -= 20
+        if "date" not in game_data:
+            score -= 20
+        try:
+            datetime.strptime(game_data.get("date", ""), "%Y-%m-%d")
+        except Exception:
+            score -= 10
+        ft_score = game_data.get("score", {}).get("ft")
+        if not (isinstance(ft_score, list) and len(ft_score) == 2):
+            score -= 10
+
+        return max(score, 0)
 
 
 class DataCleaner:
@@ -90,109 +128,48 @@ class DataCleaner:
 
     @staticmethod
     def clean_team_name(team_name: str) -> str:
-        """
-        Normalize team name format.
-
-        Args:
-            team_name: Raw team name
-
-        Returns:
-            Cleaned team name
-        """
         if not team_name:
             return ""
-
-        # Remove extra whitespace and normalize case
         cleaned = re.sub(r"\s+", " ", team_name.strip())
-
-        # Remove common football suffixes
         suffixes = [" FC", " F.C.", " CF", " C.F."]
         for suffix in suffixes:
             if cleaned.endswith(suffix):
                 cleaned = cleaned[: -len(suffix)]
                 break
-
         return cleaned
 
     @staticmethod
     def clean_player_name(player_name: str) -> str:
-        """
-        Normalize player name format.
-
-        Args:
-            player_name: Raw player name
-
-        Returns:
-            Cleaned player name
-        """
         if not player_name:
             return ""
-
-        # Remove extra whitespace and normalize case
         cleaned = re.sub(r"\s+", " ", player_name.strip())
-
-        # Remove trailing periods from Jr., Sr., etc.
         if cleaned.endswith("."):
             cleaned = cleaned[:-1]
-
         return cleaned.title()
 
     @staticmethod
     def normalize_date(date_value: str | datetime) -> str:
-        """
-        Normalize date values to string format.
-
-        Args:
-            date_value: Date as string or datetime object
-
-        Returns:
-            Normalized date string in YYYY-MM-DD format
-        """
         if isinstance(date_value, datetime):
             return date_value.strftime("%Y-%m-%d")
-
         if isinstance(date_value, str):
-            # Try common date formats
-            formats = [
-                "%Y-%m-%d",
-                "%Y-%m-%d %H:%M:%S",
-                "%m/%d/%Y",
-                "%d/%m/%Y",
-                "%b %d, %Y",
-            ]
-
+            formats = ["%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%m/%d/%Y", "%d/%m/%Y", "%b %d, %Y"]
             for fmt in formats:
                 try:
                     dt = datetime.strptime(date_value, fmt)
                     return dt.strftime("%Y-%m-%d")
                 except ValueError:
                     continue
-
         logger.warning(f"Could not parse date: {date_value}")
         return date_value
 
     @staticmethod
     def clean_numeric_stats(stats: dict[str, Any]) -> dict[str, Any]:
-        """
-        Clean and validate numeric statistics.
-
-        Args:
-            stats: Dictionary containing numeric statistics
-
-        Returns:
-            Dictionary with cleaned numeric values, excluding invalid stats
-        """
         cleaned_stats = {}
-
         for key, value in stats.items():
-            # Skip None values
             if value is None:
                 continue
-
             try:
-                # Try to convert to float
                 if isinstance(value, str):
-                    # Remove non-numeric characters except decimal point
                     cleaned_value = re.sub(r"[^\d.-]", "", value)
                     if cleaned_value:
                         cleaned_stats[key] = float(cleaned_value)
@@ -200,6 +177,4 @@ class DataCleaner:
                     cleaned_stats[key] = float(value)
             except (ValueError, TypeError):
                 logger.warning(f"Could not clean numeric value for {key}: {value}")
-                # Skip invalid values instead of setting to 0.0
-
         return cleaned_stats
