@@ -7,7 +7,7 @@ from tools.data_validation import DataCleaner, DataValidator
 from tools.sports_apis import APIFootballClient
 
 load_dotenv()
-print("API Key from env:", os.getenv("API_FOOTBALL_KEY"))
+
 
 
 def test_fixture_validation():
