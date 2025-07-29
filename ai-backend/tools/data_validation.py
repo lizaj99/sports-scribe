@@ -72,6 +72,56 @@ class DataValidator:
         return (len(issues) == 0), score_value, issues
 
     @staticmethod
+    def validate_api_football_fixture(fixture: dict[str, Any]) -> tuple[bool, int, list[str]]:
+        issues = []
+
+        DataValidator._check_fixture_sections(fixture, issues)
+        DataValidator._check_team_data(fixture, issues)
+        DataValidator._check_score_format(fixture, issues)
+        DataValidator._check_date_format(fixture, issues)
+        DataValidator._check_for_negative_scores(fixture, issues)
+
+        score = max(0, 100 - len(issues) * 5)
+        is_valid = len(issues) == 0
+        return is_valid, score, issues
+
+    @staticmethod
+    def _check_fixture_sections(fixture: dict[str, Any], issues: list[str]):
+        for section in ["fixture", "teams", "score"]:
+            if section not in fixture:
+                issues.append(f"Missing section: {section}")
+
+    @staticmethod
+    def _check_team_data(fixture: dict[str, Any], issues: list[str]):
+        teams = fixture.get("teams", {})
+        for side in ["home", "away"]:
+            team = teams.get(side, {})
+            if not team.get("name"):
+                issues.append(f"Missing or empty {side} team.name")
+
+    @staticmethod
+    def _check_score_format(fixture: dict[str, Any], issues: list[str]):
+        ft = fixture.get("score", {}).get("fulltime")
+        if not isinstance(ft, dict) or not all(isinstance(ft.get(k), int) for k in ["home", "away"]):
+            issues.append("Invalid score.fulltime format")
+
+    @staticmethod
+    def _check_date_format(fixture: dict[str, Any], issues: list[str]):
+        date_str = fixture.get("fixture", {}).get("date", "")
+        try:
+            datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
+        except (ValueError, TypeError):
+            issues.append("Invalid fixture.date format")
+
+    @staticmethod
+    def _check_for_negative_scores(fixture: dict[str, Any], issues: list[str]):
+        ft = fixture.get("score", {}).get("fulltime", {})
+        for key in ["home", "away"]:
+            score = ft.get(key)
+            if isinstance(score, int) and score < 0:
+                issues.append("Negative scores not allowed")
+
+    @staticmethod
     def validate_team_data(team_data: dict[str, Any]) -> bool:
         required_fields = ["team_id", "name", "league"]
 

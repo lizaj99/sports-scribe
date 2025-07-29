@@ -1,4 +1,13 @@
+import asyncio
+import os
+
+from dotenv import load_dotenv
+
 from tools.data_validation import DataCleaner, DataValidator
+from tools.sports_apis import APIFootballClient
+
+load_dotenv()
+print("API Key from env:", os.getenv("API_FOOTBALL_KEY"))
 
 
 def test_fixture_validation():
@@ -71,7 +80,231 @@ def test_cleaners():
     print("Cleaned stats:", DataCleaner.clean_numeric_stats(stats))
 
 
-if __name__ == "__main__":
+async def test_real_api_football_data():
+    """Test validation with real API-Football data"""
+    print("\n=== Test Real API-Football Data Validation ===")
+
+    # Check if API key is available
+    api_key = os.getenv("API_FOOTBALL_KEY")
+    if not api_key:
+        print("⚠️  API_FOOTBALL_KEY not found in environment, skipping real API tests")
+        return
+
+    try:
+        async with APIFootballClient():
+            # Test with Premier League (ID: 39) for current season
+            print("Testing validation with API-Football format data...")
+
+            # Simulate real API-Football fixtures (since actual API calls are TODO)
+            real_fixtures = [
+                {
+                    "fixture": {
+                        "id": 1234567,
+                        "date": "2024-08-16T20:00:00+00:00",
+                        "timestamp": 1723833600
+                    },
+                    "league": {
+                        "id": 39,
+                        "name": "Premier League",
+                        "season": 2024
+                    },
+                    "teams": {
+                        "home": {
+                            "id": 33,
+                            "name": "Manchester United FC"
+                        },
+                        "away": {
+                            "id": 36,
+                            "name": "Fulham FC"
+                        }
+                    },
+                    "goals": {
+                        "home": 1,
+                        "away": 0
+                    },
+                    "score": {
+                        "halftime": {"home": 0, "away": 0},
+                        "fulltime": {"home": 1, "away": 0}
+                    }
+                },
+                {
+                    "fixture": {
+                        "id": 1234568,
+                        "date": "2024-08-17T12:30:00+00:00",
+                        "timestamp": 1723885800
+                    },
+                    "league": {
+                        "id": 39,
+                        "name": "Premier League",
+                        "season": 2024
+                    },
+                    "teams": {
+                        "home": {
+                            "id": 51,
+                            "name": "Ipswich Town FC"
+                        },
+                        "away": {
+                            "id": 40,
+                            "name": "Liverpool FC"
+                        }
+                    },
+                    "goals": {
+                        "home": 0,
+                        "away": 2
+                    },
+                    "score": {
+                        "halftime": {"home": 0, "away": 0},
+                        "fulltime": {"home": 0, "away": 2}
+                    }
+                }
+            ]
+
+            print(f"Testing validation on {len(real_fixtures)} API-Football format fixtures...")
+
+            for i, fixture in enumerate(real_fixtures):
+                print(f"\nAPI Fixture {i+1}: {fixture['teams']['home']['name']} vs {fixture['teams']['away']['name']}")
+
+                # Use the API-Football specific validation
+                valid, score, issues = DataValidator.validate_api_football_fixture(fixture)
+                print(f"  Valid: {valid}")
+                print(f"  Quality Score: {score}")
+                if issues:
+                    print(f"  Issues: {issues}")
+                else:
+                    print("  ✅ No issues found")
+
+    except Exception as e:
+        print(f"❌ Error testing with API-Football data: {e}")
+
+
+def test_api_football_problematic_data():
+    """Test validation against problematic API-Football data scenarios"""
+    print("\n=== Test API-Football Problematic Data Scenarios ===")
+
+    problematic_api_fixtures = [
+        {
+            "name": "Missing Fixture Section",
+            "data": {
+                "league": {"id": 39, "name": "Premier League"},
+                "teams": {"home": {"id": 33, "name": "Team A"}, "away": {"id": 36, "name": "Team B"}},
+                "score": {"fulltime": {"home": 1, "away": 0}}
+            }
+        },
+        {
+            "name": "Invalid Date Format",
+            "data": {
+                "fixture": {"id": 123, "date": "16/08/2024"},
+                "league": {"id": 39, "name": "Premier League"},
+                "teams": {"home": {"id": 33, "name": "Team A"}, "away": {"id": 36, "name": "Team B"}},
+                "score": {"fulltime": {"home": 1, "away": 0}}
+            }
+        },
+        {
+            "name": "Missing Team Names",
+            "data": {
+                "fixture": {"id": 123, "date": "2024-08-16T20:00:00+00:00"},
+                "league": {"id": 39, "name": "Premier League"},
+                "teams": {"home": {"id": 33, "name": ""}, "away": {"id": 36, "name": "Team B"}},
+                "score": {"fulltime": {"home": 1, "away": 0}}
+            }
+        },
+        {
+            "name": "Invalid Score Format",
+            "data": {
+                "fixture": {"id": 123, "date": "2024-08-16T20:00:00+00:00"},
+                "league": {"id": 39, "name": "Premier League"},
+                "teams": {"home": {"id": 33, "name": "Team A"}, "away": {"id": 36, "name": "Team B"}},
+                "score": {"fulltime": "1-0"}  # Should be dict, not string
+            }
+        },
+        {
+            "name": "Negative Scores",
+            "data": {
+                "fixture": {"id": 123, "date": "2024-08-16T20:00:00+00:00"},
+                "league": {"id": 39, "name": "Premier League"},
+                "teams": {"home": {"id": 33, "name": "Team A"}, "away": {"id": 36, "name": "Team B"}},
+                "score": {"fulltime": {"home": -1, "away": 0}}
+            }
+        }
+    ]
+
+    for scenario in problematic_api_fixtures:
+        print(f"\n{scenario['name']}:")
+        valid, score, issues = DataValidator.validate_api_football_fixture(scenario['data'])
+        print(f"  Valid: {valid}")
+        print(f"  Quality Score: {score}")
+        print(f"  Issues: {issues}")
+
+        # Verify that problematic data is caught
+        if not valid and score < 100:
+            print("  ✅ Correctly identified as problematic")
+        else:
+            print("  ❌ Failed to identify problematic data")
+
+
+def test_validation_edge_cases():
+    """Test edge cases and boundary conditions"""
+    print("\n=== Test Validation Edge Cases ===")
+
+    edge_cases = [
+        {
+            "name": "Perfect Data",
+            "data": {
+                "round": "Matchday 1",
+                "date": "2024-08-16",
+                "team1": "Arsenal FC",
+                "team2": "Chelsea FC",
+                "score": {"ft": [2, 1]}
+            },
+            "expected_valid": True,
+            "expected_score": 100
+        },
+        {
+            "name": "Minimal Valid Data",
+            "data": {
+                "round": "Matchday 1",
+                "date": "2024-08-16",
+                "team1": "A",
+                "team2": "B",
+                "score": {"ft": [0, 0]}
+            },
+            "expected_valid": True,
+            "expected_score": 100
+        },
+        {
+            "name": "Multiple Issues",
+            "data": {
+                "date": "invalid-date",
+                "score": {"ft": "wrong"}
+            },
+            "expected_valid": False,
+            "expected_score": 0
+        }
+    ]
+
+    for case in edge_cases:
+        print(f"\n{case['name']}:")
+        valid, score, issues = DataValidator.validate_fixture(case['data'])
+        print(f"  Valid: {valid} (expected: {case['expected_valid']})")
+        print(f"  Score: {score} (expected: {case['expected_score']})")
+        print(f"  Issues: {issues}")
+
+        # Verify expectations
+        if valid == case['expected_valid'] and score == case['expected_score']:
+            print("  ✅ Passed")
+        else:
+            print("  ❌ Failed")
+
+
+async def main():
+    """Run all tests including async ones"""
     test_fixture_validation()
     test_team_validation()
     test_cleaners()
+    await test_real_api_football_data()
+    test_api_football_problematic_data()
+    test_validation_edge_cases()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
