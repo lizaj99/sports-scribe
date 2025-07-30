@@ -114,12 +114,17 @@ class DataValidator:
             issues.append("Invalid fixture.date format")
 
     @staticmethod
+    @staticmethod
     def _check_for_negative_scores(fixture: dict[str, Any], issues: list[str]):
         ft = fixture.get("score", {}).get("fulltime", {})
+        if not isinstance(ft, dict):
+            issues.append("Invalid fulltime score format")
+            return
         for key in ["home", "away"]:
             score = ft.get(key)
             if isinstance(score, int) and score < 0:
                 issues.append("Negative scores not allowed")
+
 
     @staticmethod
     def validate_team_data(team_data: dict[str, Any]) -> bool:
