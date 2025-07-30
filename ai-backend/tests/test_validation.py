@@ -71,6 +71,46 @@ def test_cleaners():
     }
     print("Cleaned stats:", DataCleaner.clean_numeric_stats(stats))
 
+def fetch_sample_fixtures():
+    return [
+        {
+            "fixture": {
+                "id": 1234567,
+                "date": "2024-08-16T20:00:00+00:00",
+                "timestamp": 1723833600
+            },
+            "league": {
+                "id": 39,
+                "name": "Premier League",
+                "season": 2024
+            },
+            "teams": {
+                "home": {"id": 33, "name": "Manchester United FC"},
+                "away": {"id": 36, "name": "Fulham FC"}
+            },
+            "goals": {"home": 1, "away": 0},
+            "score": {"halftime": {"home": 0, "away": 0}, "fulltime": {"home": 1, "away": 0}}
+        },
+        {
+            "fixture": {
+                "id": 1234568,
+                "date": "2024-08-17T12:30:00+00:00",
+                "timestamp": 1723885800
+            },
+            "league": {
+                "id": 39,
+                "name": "Premier League",
+                "season": 2024
+            },
+            "teams": {
+                "home": {"id": 51, "name": "Ipswich Town FC"},
+                "away": {"id": 40, "name": "Liverpool FC"}
+            },
+            "goals": {"home": 0, "away": 2},
+            "score": {"halftime": {"home": 0, "away": 0}, "fulltime": {"home": 0, "away": 2}}
+        }
+    ]
+
 def run_real_fixture_validation(fixture, index):
     print(f"\nAPI Fixture {index}: {fixture['teams']['home']['name']} vs {fixture['teams']['away']['name']}")
     valid, score, issues = DataValidator.validate_api_football_fixture(fixture)
@@ -91,49 +131,10 @@ async def test_real_api_football_data():
     try:
         async with APIFootballClient():
             print("Testing validation with API-Football format data...")
-            real_fixtures = [
-                {
-                    "fixture": {
-                        "id": 1234567,
-                        "date": "2024-08-16T20:00:00+00:00",
-                        "timestamp": 1723833600
-                    },
-                    "league": {
-                        "id": 39,
-                        "name": "Premier League",
-                        "season": 2024
-                    },
-                    "teams": {
-                        "home": {"id": 33, "name": "Manchester United FC"},
-                        "away": {"id": 36, "name": "Fulham FC"}
-                    },
-                    "goals": {"home": 1, "away": 0},
-                    "score": {"halftime": {"home": 0, "away": 0}, "fulltime": {"home": 1, "away": 0}}
-                },
-                {
-                    "fixture": {
-                        "id": 1234568,
-                        "date": "2024-08-17T12:30:00+00:00",
-                        "timestamp": 1723885800
-                    },
-                    "league": {
-                        "id": 39,
-                        "name": "Premier League",
-                        "season": 2024
-                    },
-                    "teams": {
-                        "home": {"id": 51, "name": "Ipswich Town FC"},
-                        "away": {"id": 40, "name": "Liverpool FC"}
-                    },
-                    "goals": {"home": 0, "away": 2},
-                    "score": {"halftime": {"home": 0, "away": 0}, "fulltime": {"home": 0, "away": 2}}
-                }
-            ]
-
+            real_fixtures = fetch_sample_fixtures()
             print(f"Testing validation on {len(real_fixtures)} API-Football format fixtures...")
             for i, fixture in enumerate(real_fixtures):
                 run_real_fixture_validation(fixture, i + 1)
-
     except Exception as e:
         print(f"❌ Error testing with API-Football data: {e}")
 
